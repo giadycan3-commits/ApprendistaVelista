@@ -450,7 +450,25 @@ main{ max-width:1100px; margin:0 auto; padding:22px clamp(14px,4vw,40px) 60px; }
   width:100%;
   height:auto;
   display:block;
+  cursor:zoom-in;
+  transition:filter .15s ease;
 }
+.proto-photo img:hover{ filter:brightness(0.92); }
+.proto-photo::after{
+  content:'🔍';
+  position:absolute;
+  right:10px; bottom:10px;
+  width:30px; height:30px;
+  border-radius:50%;
+  background:rgba(11,42,61,0.65);
+  color:#fff;
+  display:flex; align-items:center; justify-content:center;
+  font-size:.85rem;
+  pointer-events:none;
+  opacity:0;
+  transition:opacity .15s ease;
+}
+.proto-photo:hover::after{ opacity:1; }
 .proto-photo-fallback{
   display:flex; flex-direction:column; align-items:center; justify-content:center;
   gap:8px;
@@ -530,6 +548,54 @@ a.btn{ text-decoration:none; display:inline-flex; align-items:center; gap:7px; }
 .modal-card p{ color:#3C5867; margin:0 0 4px; }
 .modal-time{ font-family:var(--font-display); font-size:2.1rem; color:var(--success); margin:10px 0 18px; }
 .modal-actions{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:6px; }
+
+/* -------------------------------------------------------------------------
+   LIGHTBOX FOTO A TUTTO SCHERMO (Fase 3) — zoomabile con rotellina/pizzico
+   ------------------------------------------------------------------------- */
+.lightbox-overlay{
+  position:fixed; inset:0;
+  background:rgba(6,16,22,0.94);
+  z-index:3000;
+  display:flex;
+  touch-action:none; /* gestiamo noi pizzico/trascinamento, non il browser */
+}
+.lightbox-overlay.hidden{ display:none; }
+.lightbox-stage{
+  flex:1;
+  display:flex; align-items:center; justify-content:center;
+  overflow:hidden;
+  cursor:default;
+}
+.lightbox-stage img{
+  max-width:90vw;
+  max-height:80vh;
+  cursor:zoom-in;
+  user-select:none;
+  -webkit-user-drag:none;
+  transform-origin:center center;
+  will-change:transform;
+  border-radius:4px;
+  box-shadow:0 10px 40px rgba(0,0,0,0.5);
+}
+.lightbox-stage img.is-zoomed{ cursor:grab; }
+.lightbox-stage img.is-dragging{ cursor:grabbing; }
+.lightbox-close{
+  position:absolute; top:16px; right:16px;
+  width:44px; height:44px; border-radius:50%;
+  border:none; background:rgba(255,255,255,0.14); color:#fff;
+  font-size:1.2rem; line-height:1; cursor:pointer;
+  z-index:3001;
+  transition:background .15s ease;
+}
+.lightbox-close:hover{ background:rgba(255,255,255,0.28); }
+.lightbox-hint{
+  position:absolute; left:0; right:0; bottom:14px;
+  text-align:center; margin:0;
+  color:rgba(255,255,255,0.72);
+  font-size:.78rem;
+  pointer-events:none;
+}
+@media (max-width:640px){ .lightbox-hint{ font-size:.7rem; padding:0 12px; } }
 
 footer.note{ text-align:center; color:#7C93A0; font-size:.8rem; padding:0 16px 30px; }
 
@@ -655,6 +721,7 @@ footer.note{ text-align:center; color:#7C93A0; font-size:.8rem; padding:0 16px 3
         <button class="btn btn-secondary" id="btnRestartSim">Ricomincia percorso</button>
         <button class="btn btn-ghost" id="btnBackToPhase1">Torna alla Fase 1</button>
         <button class="btn btn-ghost" id="btnSkipToPhase3">Salta alla Fase 3</button>
+        <button class="btn btn-ghost" id="btnRestartFromPhase1-2">Ricomincia dalla Fase 1</button>
       </div>
     </div>
 
@@ -692,6 +759,10 @@ footer.note{ text-align:center; color:#7C93A0; font-size:.8rem; padding:0 16px 3
       </div>
     </div>
 
+    <div class="cta-row">
+      <button class="btn btn-ghost" id="btnRestartFromPhase1-3">Ricomincia dalla Fase 1</button>
+    </div>
+
     <div class="prototype-grid" id="prototypeGrid"><!-- generato via JavaScript --></div>
   </section>
 
@@ -711,6 +782,15 @@ footer.note{ text-align:center; color:#7C93A0; font-size:.8rem; padding:0 16px 3
       <button class="btn btn-ghost" id="btnBackToAssembly">Torna all'allestimento</button>
     </div>
   </div>
+</div>
+
+<!-- ======================= LIGHTBOX FOTO (Fase 3) ======================= -->
+<div class="lightbox-overlay hidden" id="lightboxOverlay">
+  <button class="lightbox-close" id="lightboxClose" aria-label="Chiudi immagine" type="button">✕</button>
+  <div class="lightbox-stage" id="lightboxStage">
+    <img id="lightboxImg" src="" alt="">
+  </div>
+  <p class="lightbox-hint">Pizzica o usa la rotellina per ingrandire · trascina per spostare · tocca per ingrandire/ridurre</p>
 </div>
 
 <script>
@@ -1168,7 +1248,10 @@ function updateAssemblyProgress(){
 
 document.getElementById('btnSail').addEventListener('click', ()=> goToPhase(2));
 
-document.getElementById('btnResetAssembly').addEventListener('click', ()=>{
+/* Riporta l'allestimento a zero: usata sia dal pulsante di Fase 1 (che resta
+   sul posto) sia dai pulsanti "Ricomincia dalla Fase 1" delle altre fasi
+   (che dopo il reset navigano anche indietro alla Fase 1). */
+function resetAssemblyState(){
   stopAssemblyRock();
   PART_NAMES.forEach(p=>{ assemblyState[p]=false; });
   partEls.forEach(el=>{
@@ -1178,7 +1261,16 @@ document.getElementById('btnResetAssembly').addEventListener('click', ()=>{
   });
   drawAssembly();
   updateAssemblyProgress();
-});
+}
+
+/* Reset completo richiamabile da qualunque fase: azzera l'allestimento e
+   torna alla Fase 1 per ricominciare tutto da capo. */
+function restartFromPhase1(){
+  resetAssemblyState();
+  goToPhase(1);
+}
+
+document.getElementById('btnResetAssembly').addEventListener('click', resetAssemblyState);
 
 /* =========================================================================
    FASE 2 — SIMULAZIONE DI NAVIGAZIONE
@@ -1633,6 +1725,7 @@ document.getElementById('btnRestartSim').addEventListener('click', ()=>{
 });
 document.getElementById('btnBackToPhase1').addEventListener('click', ()=> goToPhase(1));
 document.getElementById('btnSkipToPhase3').addEventListener('click', ()=> goToPhase(3));
+document.getElementById('btnRestartFromPhase1-2').addEventListener('click', restartFromPhase1);
 
 /* ---- selettore di inquadratura ---- */
 const viewMapBtn = document.getElementById('viewMap');
@@ -1765,9 +1858,164 @@ function renderPrototypeSection(){
       img.classList.add('hidden');
       fallback.classList.remove('hidden');
     });
+
+    // clic sulla foto: apertura a tutto schermo, zoomabile
+    img.addEventListener('click', ()=> openLightbox(img.src, img.alt));
   });
 }
 renderPrototypeSection();
+document.getElementById('btnRestartFromPhase1-3').addEventListener('click', restartFromPhase1);
+
+/* =========================================================================
+   LIGHTBOX A TUTTO SCHERMO ZOOMABILE (Fase 3)
+   Funziona con: clic per ingrandire/ridurre, rotellina del mouse, pizzico a
+   due dita, trascinamento quando è ingrandita.
+   ========================================================================= */
+const lightbox = {
+  overlay: document.getElementById('lightboxOverlay'),
+  stage:   document.getElementById('lightboxStage'),
+  img:     document.getElementById('lightboxImg'),
+  scale: 1, tx: 0, ty: 0,
+  pointers: new Map(),      // pointerId -> {x,y}, per riconoscere il pizzico a due dita
+  pinchStartDist: 0,
+  pinchStartScale: 1,
+  dragging: false,
+  dragMoved: 0,
+  dragLast: null
+};
+const LIGHTBOX_MIN_SCALE = 1;
+const LIGHTBOX_MAX_SCALE = 4;
+const LIGHTBOX_CLICK_ZOOM = 2.4;
+
+function openLightbox(src, alt){
+  lightbox.img.src = src;
+  lightbox.img.alt = alt || '';
+  lightbox.scale = 1; lightbox.tx = 0; lightbox.ty = 0;
+  applyLightboxTransform();
+  lightbox.overlay.classList.remove('hidden');
+  document.body.style.overflow = 'hidden'; // niente scroll della pagina sotto
+}
+function closeLightbox(){
+  lightbox.overlay.classList.add('hidden');
+  lightbox.img.src = '';
+  document.body.style.overflow = '';
+}
+function applyLightboxTransform(){
+  lightbox.img.style.transform = 'translate('+lightbox.tx+'px,'+lightbox.ty+'px) scale('+lightbox.scale+')';
+  lightbox.img.classList.toggle('is-zoomed', lightbox.scale > 1.01);
+}
+/* Limita lo spostamento in modo che l'immagine ingrandita non esca mai
+   completamente dallo schermo: la larghezza "naturale" a scala 1 si ricava
+   dividendo il rettangolo attuale per la scala corrente. */
+function clampLightboxPan(){
+  const rect = lightbox.img.getBoundingClientRect();
+  const baseW = rect.width / lightbox.scale;
+  const baseH = rect.height / lightbox.scale;
+  const stageRect = lightbox.stage.getBoundingClientRect();
+  const overflowX = Math.max(0, (baseW*lightbox.scale - stageRect.width)/2);
+  const overflowY = Math.max(0, (baseH*lightbox.scale - stageRect.height)/2);
+  lightbox.tx = clamp(lightbox.tx, -overflowX, overflowX);
+  lightbox.ty = clamp(lightbox.ty, -overflowY, overflowY);
+}
+function setLightboxScale(newScale){
+  // la dimensione "base" (a scala 1) va ricavata dal rettangolo attuale
+  // PRIMA di cambiare lightbox.scale, altrimenti il DOM rifletterebbe ancora
+  // la vecchia scala mentre noi calcoleremmo già con quella nuova
+  const rect = lightbox.img.getBoundingClientRect();
+  const baseW = rect.width / lightbox.scale;
+  const baseH = rect.height / lightbox.scale;
+
+  lightbox.scale = clamp(newScale, LIGHTBOX_MIN_SCALE, LIGHTBOX_MAX_SCALE);
+
+  const stageRect = lightbox.stage.getBoundingClientRect();
+  const overflowX = Math.max(0, (baseW*lightbox.scale - stageRect.width)/2);
+  const overflowY = Math.max(0, (baseH*lightbox.scale - stageRect.height)/2);
+  lightbox.tx = clamp(lightbox.tx, -overflowX, overflowX);
+  lightbox.ty = clamp(lightbox.ty, -overflowY, overflowY);
+  applyLightboxTransform();
+}
+
+document.getElementById('lightboxClose').addEventListener('click', closeLightbox);
+
+// clic sullo sfondo scuro (fuori dall'immagine) per chiudere
+lightbox.stage.addEventListener('click', (e)=>{
+  if(e.target === lightbox.stage) closeLightbox();
+});
+
+// tasto Esc per chiudere
+document.addEventListener('keydown', (e)=>{
+  if(e.key === 'Escape' && !lightbox.overlay.classList.contains('hidden')) closeLightbox();
+});
+
+// rotellina del mouse: zoom centrato
+lightbox.stage.addEventListener('wheel', (e)=>{
+  if(lightbox.overlay.classList.contains('hidden')) return;
+  e.preventDefault();
+  const step = e.deltaY < 0 ? 0.3 : -0.3;
+  setLightboxScale(lightbox.scale + step);
+}, { passive:false });
+
+// trascinamento (pan) + pizzico a due dita (pinch) + clic singolo per zoom
+lightbox.stage.addEventListener('pointerdown', (e)=>{
+  lightbox.pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+  lightbox.stage.setPointerCapture(e.pointerId);
+
+  if(lightbox.pointers.size === 2){
+    const pts = Array.from(lightbox.pointers.values());
+    lightbox.pinchStartDist = Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y) || 1;
+    lightbox.pinchStartScale = lightbox.scale;
+    lightbox.dragging = false;
+  } else if(lightbox.pointers.size === 1){
+    lightbox.dragging = true;
+    lightbox.dragMoved = 0;
+    lightbox.dragLast = {x:e.clientX, y:e.clientY};
+    lightbox.img.classList.add('is-dragging');
+  }
+});
+
+lightbox.stage.addEventListener('pointermove', (e)=>{
+  if(!lightbox.pointers.has(e.pointerId)) return;
+  lightbox.pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+
+  if(lightbox.pointers.size === 2){
+    // pizzico a due dita: la scala segue la distanza fra le due dita
+    const pts = Array.from(lightbox.pointers.values());
+    const dist = Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y) || 1;
+    setLightboxScale(lightbox.pinchStartScale * (dist/lightbox.pinchStartDist));
+  } else if(lightbox.dragging && lightbox.dragLast){
+    const dx = e.clientX - lightbox.dragLast.x;
+    const dy = e.clientY - lightbox.dragLast.y;
+    lightbox.dragLast = {x:e.clientX, y:e.clientY};
+    lightbox.dragMoved += Math.abs(dx)+Math.abs(dy);
+    if(lightbox.scale > 1.01){
+      lightbox.tx += dx;
+      lightbox.ty += dy;
+      clampLightboxPan();
+      applyLightboxTransform();
+    }
+  }
+});
+
+function endLightboxPointer(e){
+  const wasSinglePointer = lightbox.pointers.size === 1 && lightbox.pointers.has(e.pointerId);
+  lightbox.pointers.delete(e.pointerId);
+  lightbox.img.classList.remove('is-dragging');
+
+  // un tocco/clic con pochissimo movimento = attiva/disattiva lo zoom
+  if(wasSinglePointer && lightbox.dragging && lightbox.dragMoved < 6){
+    if(lightbox.scale > 1.01){
+      setLightboxScale(1);
+      lightbox.tx = 0; lightbox.ty = 0;
+      applyLightboxTransform();
+    } else {
+      setLightboxScale(LIGHTBOX_CLICK_ZOOM);
+    }
+  }
+  lightbox.dragging = false;
+  if(lightbox.pointers.size < 2){ lightbox.pinchStartDist = 0; }
+}
+lightbox.stage.addEventListener('pointerup', endLightboxPointer);
+lightbox.stage.addEventListener('pointercancel', endLightboxPointer);
 
 /* stato iniziale */
 updateAssemblyProgress();
