@@ -446,24 +446,10 @@ main{ max-width:1100px; margin:0 auto; padding:22px clamp(14px,4vw,40px) 60px; }
   background:var(--foam-dim);
   line-height:0; /* la forma del riquadro segue esattamente quella della foto */
 }
-.proto-photo-link{
-  position:relative;
-  display:block;
-  cursor:pointer;
-}
-.proto-photo-link img{
+.proto-photo img{
   width:100%;
   height:auto;
   display:block;
-}
-.proto-photo-badge{
-  position:absolute; left:0; right:0; bottom:0;
-  background:linear-gradient(0deg, rgba(11,42,61,0.82), rgba(11,42,61,0));
-  color:#fff;
-  font-size:.82rem;
-  font-weight:700;
-  padding:20px 12px 8px;
-  text-align:center;
 }
 .proto-photo-fallback{
   display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -484,16 +470,6 @@ main{ max-width:1100px; margin:0 auto; padding:22px clamp(14px,4vw,40px) 60px; }
   padding:1px 6px;
   border-radius:5px;
   font-weight:800;
-}
-.proto-photo-note{
-  position:absolute; left:8px; right:8px; bottom:8px;
-  background:rgba(214,85,63,0.95);
-  color:#fff;
-  font-size:.74rem;
-  font-weight:700;
-  padding:6px 8px;
-  border-radius:8px;
-  text-align:center;
 }
 
 .proto-pdf-btn{
@@ -678,6 +654,7 @@ footer.note{ text-align:center; color:#7C93A0; font-size:.8rem; padding:0 16px 3
       <div class="hud-buttons">
         <button class="btn btn-secondary" id="btnRestartSim">Ricomincia percorso</button>
         <button class="btn btn-ghost" id="btnBackToPhase1">Torna alla Fase 1</button>
+        <button class="btn btn-ghost" id="btnSkipToPhase3">Salta alla Fase 3</button>
       </div>
     </div>
 
@@ -711,7 +688,7 @@ footer.note{ text-align:center; color:#7C93A0; font-size:.8rem; padding:0 16px 3
     <div class="intro-row">
       <div>
         <h2>Prototipo con materiale povero</h2>
-        <p>Ora tocca a te: scegli un tipo di scafo e costruiscine un prototipo vero con materiali semplici e di recupero. Ogni scheda mostra automaticamente la foto del modello (cliccabile per il video tutorial) e il pulsante per la scheda tecnica in PDF.</p>
+        <p>Ora tocca a te: scegli un tipo di scafo e costruiscine un prototipo vero con materiali semplici e di recupero. Ogni scheda mostra automaticamente la foto del modello e il pulsante per la scheda tecnica in PDF.</p>
       </div>
     </div>
 
@@ -730,7 +707,8 @@ footer.note{ text-align:center; color:#7C93A0; font-size:.8rem; padding:0 16px 3
     <div class="modal-time" id="winTime">0.0 s</div>
     <div class="modal-actions">
       <button class="btn btn-primary" id="btnPlayAgain">Rigioca il percorso</button>
-      <button class="btn btn-secondary" id="btnBackToAssembly">Torna all'allestimento</button>
+      <button class="btn btn-secondary" id="btnGoToPhase3">Vai alla Fase 3</button>
+      <button class="btn btn-ghost" id="btnBackToAssembly">Torna all'allestimento</button>
     </div>
   </div>
 </div>
@@ -1654,6 +1632,7 @@ document.getElementById('btnRestartSim').addEventListener('click', ()=>{
   resetBoat(); startSimLoop();
 });
 document.getElementById('btnBackToPhase1').addEventListener('click', ()=> goToPhase(1));
+document.getElementById('btnSkipToPhase3').addEventListener('click', ()=> goToPhase(3));
 
 /* ---- selettore di inquadratura ---- */
 const viewMapBtn = document.getElementById('viewMap');
@@ -1668,6 +1647,10 @@ viewSternBtn.addEventListener('click', ()=> setCameraMode('stern'));
 document.getElementById('btnPlayAgain').addEventListener('click', ()=>{
   document.getElementById('winModal').classList.add('hidden');
   resetBoat(); startSimLoop();
+});
+document.getElementById('btnGoToPhase3').addEventListener('click', ()=>{
+  document.getElementById('winModal').classList.add('hidden');
+  goToPhase(3);
 });
 document.getElementById('btnBackToAssembly').addEventListener('click', ()=>{
   document.getElementById('winModal').classList.add('hidden');
@@ -1697,15 +1680,6 @@ const HULL_ICONS = {
   zattera: '<svg viewBox="0 0 64 40"><g fill="#B5793B" stroke="#8C5A26" stroke-width="1.3"><rect x="4" y="14" width="9" height="16" rx="4"/><rect x="15" y="14" width="9" height="16" rx="4"/><rect x="26" y="14" width="9" height="16" rx="4"/><rect x="37" y="14" width="9" height="16" rx="4"/><rect x="48" y="14" width="9" height="16" rx="4"/></g><line x1="4" y1="19" x2="57" y2="19" stroke="#5C3A18" stroke-width="1.3"/><line x1="4" y1="25" x2="57" y2="25" stroke="#5C3A18" stroke-width="1.3"/></svg>',
   monoscafo: '<svg viewBox="0 0 64 40"><path d="M8 20 L8 13 Q32 5 56 15 L50 27 Q32 33 14 28 Z" fill="#B5793B" stroke="#8C5A26" stroke-width="1.4"/></svg>',
   catamarano: '<svg viewBox="0 0 64 40"><path d="M4 22 L4 17 Q14 12 24 17 L21 27 Q13 30 7 27 Z" fill="#B5793B" stroke="#8C5A26" stroke-width="1.2"/><path d="M40 22 L40 17 Q50 12 60 17 L57 27 Q49 30 43 27 Z" fill="#B5793B" stroke="#8C5A26" stroke-width="1.2"/><rect x="20" y="15" width="24" height="5" fill="#C98A3B" stroke="#8E5F26" stroke-width="1.1"/></svg>'
-};
-
-/* ⚠️ Inserisci qui i link ai tuoi video su GitHub: uno per ciascun tipo di
-   scafo. Basta incollare l'URL fra le virgolette (es. un link a un file
-   .mp4 caricato in una Release di GitHub, o a raw.githubusercontent.com). */
-const VIDEO_LINKS = {
-  zattera:    '',
-  monoscafo:  '',
-  catamarano: ''
 };
 
 const PROTOTYPE_CATEGORIES = [
@@ -1766,10 +1740,7 @@ function buildPrototypeCard(cat){
       '<h3>'+cat.name+'</h3>'+
     '</div>'+
     '<div class="proto-photo" id="protoPhoto-'+cat.id+'">'+
-      '<a href="#" target="_blank" rel="noopener" class="proto-photo-link" id="protoLink-'+cat.id+'">'+
-        '<img src="'+cat.id+'.jpg" alt="Foto del prototipo '+cat.name.toLowerCase()+'" id="protoImg-'+cat.id+'">'+
-        '<span class="proto-photo-badge">▶ Guarda il video tutorial</span>'+
-      '</a>'+
+      '<img src="'+cat.id+'.jpg" alt="Foto del prototipo '+cat.name.toLowerCase()+'" id="protoImg-'+cat.id+'">'+
       '<div class="proto-photo-fallback hidden" id="protoFallback-'+cat.id+'">'+
         CAMERA_ICON+
         '<span>Carica il file <code>'+cat.id+'.jpg</code> nella stessa cartella di questo file</span>'+
@@ -1786,33 +1757,13 @@ function renderPrototypeSection(){
   grid.innerHTML = PROTOTYPE_CATEGORIES.map(buildPrototypeCard).join('');
 
   PROTOTYPE_CATEGORIES.forEach(cat=>{
-    const link = document.getElementById('protoLink-'+cat.id);
     const img = document.getElementById('protoImg-'+cat.id);
     const fallback = document.getElementById('protoFallback-'+cat.id);
-    const photoBox = document.getElementById('protoPhoto-'+cat.id);
 
     // se "<id>.jpg" non viene trovato accanto a index.html, mostra il segnaposto
     img.addEventListener('error', ()=>{
-      link.classList.add('hidden');
+      img.classList.add('hidden');
       fallback.classList.remove('hidden');
-    });
-
-    link.addEventListener('click', (e)=>{
-      const url = VIDEO_LINKS[cat.id];
-      if(!url){
-        e.preventDefault();
-        // il video non è ancora stato collegato: mostra un avviso momentaneo
-        // invece di aprire un link vuoto (basta compilare VIDEO_LINKS sopra)
-        const existingNote = photoBox.querySelector('.proto-photo-note');
-        if(existingNote) return;
-        const note = document.createElement('div');
-        note.className = 'proto-photo-note';
-        note.textContent = 'Nessun video collegato: aggiungi il link in VIDEO_LINKS nel codice.';
-        photoBox.appendChild(note);
-        setTimeout(()=> note.remove(), 3200);
-      } else {
-        link.href = url;
-      }
     });
   });
 }
